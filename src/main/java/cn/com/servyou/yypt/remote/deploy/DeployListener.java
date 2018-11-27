@@ -58,7 +58,14 @@ public class DeployListener implements ServletContextListener {
         }
 
         //1. 访问远程的仓库，获得相关配置文件项
-        Properties properties = fetchDeployMeta(servletContextEvent.getServletContext().getInitParameter(DEPLOY_REPOSITORY_URL));
+        String remoteUrl = System.getProperty(DEPLOY_REPOSITORY_URL);
+        if (remoteUrl == null || "".equals(remoteUrl.trim())) {
+            remoteUrl = servletContextEvent.getServletContext().getInitParameter(DEPLOY_REPOSITORY_URL);
+        }
+        if (remoteUrl == null || "".equals(remoteUrl.trim())) {
+            return;
+        }
+        Properties properties = fetchDeployMeta(remoteUrl);
         if (properties.isEmpty()) {
             return; //认为我们已经无能为力了，发生重启时，但是配置文件已经被替换好了
         }
@@ -75,7 +82,7 @@ public class DeployListener implements ServletContextListener {
             if ("classes".equals(subFile.getName())) {
                 continue;
             }
-            if (DEPLOY_TMP.equals(subFile.getName())){
+            if (DEPLOY_TMP.equals(subFile.getName())) {
                 continue;
             }
             subDirs.add(subFile);
