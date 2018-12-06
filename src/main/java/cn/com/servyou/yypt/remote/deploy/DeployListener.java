@@ -35,10 +35,18 @@ public class DeployListener implements ServletContextListener {
 
     private static final String TAG = "${";
 
+    private static final String ENABLE_REMOTE = "enable_remote";
+
     private final PlaceholderResolvingResolver placeholderResolvingResolver = new PlaceholderResolvingResolver();
 
     @Override
     public void contextInitialized(ServletContextEvent servletContextEvent) {
+        String enable = servletContextEvent.getServletContext().getInitParameter(ENABLE_REMOTE);
+        if (!"true".equalsIgnoreCase(enable)){
+            logger.info("use local mode.");
+            return;
+        }
+        logger.info("use remote mode");
         String rootPath = servletContextEvent.getServletContext().getRealPath("/") + "WEB-INF";
         if (rootPath == null) {
             return;
