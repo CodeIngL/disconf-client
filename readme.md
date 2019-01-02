@@ -23,7 +23,7 @@ simpile解决方案为：
 缺点：
 
 1. 不支持disconf动态修改
-2. 修改disconf配置，必须重新部署而不是简单重启
+2. 修改disconf配置,必须重新部署而不是简单重启
 
 也就说我们仅仅支持将文件托管给disconf管理。
 
@@ -43,17 +43,56 @@ pom
 
 web.xml 
 
-	<listener>
-        <listener-class>
-            cn.com.servyou.yypt.remote.deploy.DeployListener
-        </listener-class>
+    <listener>
+        <listener-class>cn.com.servyou.yypt.remote.deploy.DeployListener</listener-class>
     </listener>
     <context-param>
+        <param-name>enable_remote</param-name>
+        <param-value>true</param-value>
+    </context-param>
+    <context-param>
         <param-name>repositoryURL</param-name>
-        <param-value>http://localhost:8001/xxxx/filter-develop.properties</param-value>
+        <param-value>http://192.168.150.165:9002/servyconf/api/config/file</param-value>
+    </context-param>
+    <context-param>
+        <param-name>ignoreFiles</param-name>
+        <param-value>Log4jConfig.properties</param-value>
+    </context-param>
+    <context-param>
+        <param-name>ignoreKeys</param-name>
+        <param-value>catalina.home</param-value>
+    </context-param>
+    <context-param>
+        <param-name>cautious_enable</param-name>
+        <param-value>false</param-value>
+    </context-param>
+    <context-param>
+        <param-name>iris_appName</param-name>
+        <param-value>nbgl_wlgl</param-value>
+    </context-param>
+    <context-param>
+        <param-name>iris_appFileNames</param-name>
+        <param-value>filter-docker-spare.properties</param-value>
+    </context-param>
+    <context-param>
+        <param-name>iris_appEnv</param-name>
+        <param-value>dev</param-value>
+    </context-param>
+    <context-param>
+        <param-name>iris_appVersion</param-name>
+        <param-value>1.0.0</param-value>
     </context-param>
 
-repositoryURL值为下载地址
+- enable使用远程or本地模式
+- repositoryURL远程api前缀
+- ignoreFiles校验时需要忽略的文件
+- ignoreKeys替换是需要忽略的项
+- cautious_enable谨慎的模式
+
+- iris_appName项目名
+- iris_appFileNames托管的配置文件名
+- iris_appEnv环境
+- iris_appVersion版本
 
 
 #### 逻辑原理
@@ -74,6 +113,7 @@ repositoryURL值为下载地址
     > **tip**：在放置前，我们将清空临时目录。
 
 4. 处理临时目录中的配置文件，并将处理后的内容，写回源文件中，完成占位符替换。
+
 5. 程序正常启动
 
 

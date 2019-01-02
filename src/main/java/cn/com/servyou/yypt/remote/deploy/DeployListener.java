@@ -28,28 +28,74 @@ public class DeployListener implements ServletContextListener {
 
     private static final Logger logger = LoggerFactory.getLogger(DeployListener.class);
 
-    private static final String DEPLOY_REPOSITORY_URL = "repositoryURL";
-
+    /**
+     * 后备目录
+     */
     private static final String DEPLOY_TMP = "deploy_tmp";
 
+    /**
+     * 占位符
+     */
     private static final String TAG = "${";
 
+    /**
+     * 远程的仓库的url
+     */
+    private static final String DEPLOY_REPOSITORY_URL = "repositoryURL";
+
+    /**
+     * 开关用于开启本地和远程模式
+     */
     private static final String ENABLE_REMOTE = "enable_remote";
 
+    /**
+     * 在解析过程需要忽略掉不会被解析的${}
+     *
+     * <p>
+     * ex: catalina.home
+     * </p>
+     */
     private static final String IGNORE_VALUE = "ignoreKeys";
 
+    /**
+     * 在验证过程中需要忽略掉不会引发校验的文件
+     */
     private static final String IGNORE_FILE_VALUE = "ignoreFiles";
 
+    /**
+     * 保守的策略
+     */
+    private static final String CAUTIOUS_ENABLE = "cautious_enable";
+
+    /**
+     * 名字
+     */
     private static final String APP = "iris_appName";
 
+    /**
+     * 文件名
+     */
     private static final String KEY = "iris_appFileNames";
 
+    /**
+     * 环境
+     */
     private static final String ENV = "iris_appEnv";
 
+    /**
+     * 版本
+     */
     private static final String VERSION = "iris_appVersion";
 
+    /**
+     * 替换时忽略的项
+     */
     @Deprecated
     private final Set<String> ignores = new HashSet<String>(64);
+
+    /**
+     * 检查时忽略的文件
+     */
     private final Set<String> ignoreFiles = new HashSet<String>(64);
 
     private final PlaceholderResolvingResolver placeholderResolvingResolver = new PlaceholderResolvingResolver();
@@ -93,7 +139,6 @@ public class DeployListener implements ServletContextListener {
             //todo ignore which remote technology we use
             List<IrisMeta> irisMetas = buildMetas(servletContextEvent.getServletContext());
 
-
             String rootPath = servletContextEvent.getServletContext().getRealPath("/") + "WEB-INF";
             if (rootPath == null) {
                 return;
@@ -122,7 +167,7 @@ public class DeployListener implements ServletContextListener {
             }
             Properties properties = fetchDeployMeta(remoteUrl, irisMetas);
             if (properties.isEmpty()) {
-                logger.warn("config propeties is empty. has any problem? anything will not be replacement");
+                logger.warn("config properties is empty. has any problem? anything will not be replacement");
                 return; //认为我们已经无能为力了，发生重启时，但是配置文件已经被替换好了
             }
 
@@ -143,23 +188,49 @@ public class DeployListener implements ServletContextListener {
                 }
                 subDirs.add(subFile);
             }
-            if (checkClasses(classesDir) && checkSubDirs(subDirs)) {
-                logger.info("no thing need to be resolve.");
+
+            //检查保守策略
+            boolean cautiousEnable = false;
+            String cautiousEnableStr = servletContextEvent.getServletContext().getInitParameter(CAUTIOUS_ENABLE);
+            if ("true".equalsIgnoreCase(cautiousEnableStr)) {
+                cautiousEnable = true;
+            }
+
+            //检查是否需要进行相关解析。
+            boolean passCheck = checkClasses(classesDir) && checkSubDirs(subDirs);
+            if (passCheck && !cautiousEnable) {
+                logger.info("no thing need to be resolve. use un cautious strategy");
                 return;
             }
+            //目标的目录
             final String deployTmpPath = rootPath + File.separator + DEPLOY_TMP;
+
+            //保守策略下的处理
+            if (passCheck) {
+                logger.info("use cautious strategy");
+                File deployTemp = new File(deployTmpPath);
+                if (deployTemp.exists()) {
+                    dealAllFile(new File(deployTmpPath), properties);
+                    return;
+                }
+            }
+
+            //正常策略下的处理，ignore 是否passcheck成功。
+            // 1. 删除目标
             try {
                 FileUtils.deleteDirectory(new File(deployTmpPath));
             } catch (IOException e) {
                 logger.error("delete file failed", e);
             }
 
+            // 2. 构建目标
             try {
                 FileUtils.forceMkdir(new File(deployTmpPath));
             } catch (IOException e) {
                 logger.error("mkdir failed", e);
             }
 
+            // 3. 拷贝子目录
             try {
                 for (File subDir : subDirs) {
                     FileUtils.copyDirectory(subDir, new File(deployTmpPath + File.separator + subDir.getName()));
@@ -168,6 +239,7 @@ public class DeployListener implements ServletContextListener {
                 logger.error("copy dir failed", e);
             }
 
+            // 4. 拷贝class目录东西
             try {
                 File[] configProps = classesDir.listFiles(new FilenameFilter() {
                     @Override
@@ -185,34 +257,31 @@ public class DeployListener implements ServletContextListener {
             } catch (IOException e) {
                 logger.error("copy file failed", e);
             }
-
+            // 5. 处理
             dealAllFile(new File(deployTmpPath), properties);
         } catch (Exception e) {
             logger.error("can't work fine because:{}", e);
         }
     }
 
+    /**
+     * 构建多个元信息
+     *
+     * @param servletContext
+     * @return iris配置
+     */
     private List<IrisMeta> buildMetas(ServletContext servletContext) {
         String app = servletContext.getInitParameter(APP);
         String env = servletContext.getInitParameter(ENV);
-        String version = servletContext.getInitParameter(VERSION);
+        String ver = servletContext.getInitParameter(VERSION);
         String keys = servletContext.getInitParameter(KEY);
-        if (app == null || "".equals(app)) {
-            throw new IllegalStateException("illegal app can't be null");
-        }
-        if (env == null || "".equals(env)) {
-            throw new IllegalStateException("illegal env can't be null");
-        }
-        if (version == null || "".equals(version)) {
-            throw new IllegalStateException("illegal version can't be null");
-        }
         if (keys == null || "".equals(keys)) {
-            throw new IllegalStateException("illegal keys can't be null");
+            throw new IllegalStateException("illegal key can't be null");
         }
         String[] key = keys.split(",");
         List<IrisMeta> irisMetas = new ArrayList<IrisMeta>();
         for (String singleKey : key) {
-            irisMetas.add(new IrisMeta(app, version, singleKey, env));
+            irisMetas.add(new IrisMeta(app, ver, singleKey, env));
         }
         return irisMetas;
     }
@@ -356,7 +425,13 @@ public class DeployListener implements ServletContextListener {
         return true;
     }
 
-    private boolean checkFile(File file) {
+    /**
+     * for check file
+     *
+     * @param file
+     * @return
+     */
+    protected boolean checkFile(File file) {
         return true;
     }
 
@@ -467,50 +542,41 @@ public class DeployListener implements ServletContextListener {
         }
     }
 
-    public static void main(String[] args) {
-        Map<String, String> parameter = new HashMap<String, String>();
-        parameter.put("version", "1.0.0");
-        parameter.put("app", "nbgl_wlgl");
-        parameter.put("env", "dev");
-        parameter.put("key", "filter-docker-spare.properties");
-        parameter.put("type", "0");
-        StringBuilder builder = new StringBuilder("http://192.168.150.165:9002/servyconf/api/config/file");
-        builder.append("?");
-        for (String thisKey : parameter.keySet()) {
-            String cur = thisKey + "=" + parameter.get(thisKey);
-            cur += "&";
-            builder.append(cur);
-        }
-        if (builder.length() > 0) {
-            builder.deleteCharAt(builder.length() - 1);
-        }
-        try {
-            URL url = new URL(builder.toString());
-            System.out.println(url);
-            File file = new File(System.getProperty("user.dir") + File.separator + "tmp");
-            if (!file.exists()) {
-                file.mkdir();
-            }
-            File tmpFile = new File(file, "dconf.properties");
-            if (tmpFile.exists()) {
-                tmpFile.delete();
-            }
-            FileUtils.copyURLToFile(url, tmpFile);
-            String readline;
-            BufferedReader reader = new BufferedReader(new FileReader(tmpFile));
-            while ((readline = reader.readLine()) != null) System.out.println(readline);
-        } catch (Exception e) {
-            System.out.println(e);
-        }
-    }
-
+    /**
+     * iris对应的元信息
+     */
     private class IrisMeta {
+
+        /**
+         * app名称
+         */
         private String app;
+        /**
+         * 版本
+         */
         private String version;
+        /**
+         * key通常是文件名
+         */
         private String key;
+        /**
+         * 环境
+         */
         private String env;
 
-        public IrisMeta(String app, String version, String key, String env) {
+        IrisMeta(String app, String version, String key, String env) {
+            if (app == null || "".equals(app)) {
+                throw new IllegalStateException("illegal app can't be null");
+            }
+            if (env == null || "".equals(env)) {
+                throw new IllegalStateException("illegal env can't be null");
+            }
+            if (version == null || "".equals(version)) {
+                throw new IllegalStateException("illegal version can't be null");
+            }
+            if (key == null || "".equals(key)) {
+                throw new IllegalStateException("illegal key can't be null");
+            }
             this.app = app;
             this.version = version;
             this.key = key;
@@ -549,6 +615,11 @@ public class DeployListener implements ServletContextListener {
             this.env = env;
         }
 
+        /**
+         * build down load 打参数
+         *
+         * @return
+         */
         String toUrlParameters() {
             StringBuilder builder = new StringBuilder("?");
             return builder.append("app=")
@@ -562,4 +633,47 @@ public class DeployListener implements ServletContextListener {
                     .toString();
         }
     }
+
+    /**
+     * just for Test
+     *
+     * @param args
+     */
+    public static void main(String[] args) {
+        Map<String, String> parameter = new HashMap<String, String>();
+        parameter.put("version", "1.0.0");
+        parameter.put("app", "nbgl_wlgl");
+        parameter.put("env", "dev");
+        parameter.put("key", "filter-docker-spare.properties");
+        parameter.put("type", "0");
+        StringBuilder builder = new StringBuilder("http://192.168.150.165:9002/servyconf/api/config/file");
+        builder.append("?");
+        for (String thisKey : parameter.keySet()) {
+            String cur = thisKey + "=" + parameter.get(thisKey);
+            cur += "&";
+            builder.append(cur);
+        }
+        if (builder.length() > 0) {
+            builder.deleteCharAt(builder.length() - 1);
+        }
+        try {
+            URL url = new URL(builder.toString());
+            System.out.println(url);
+            File file = new File(System.getProperty("user.dir") + File.separator + "tmp");
+            if (!file.exists()) {
+                file.mkdir();
+            }
+            File tmpFile = new File(file, "dconf.properties");
+            if (tmpFile.exists()) {
+                tmpFile.delete();
+            }
+            FileUtils.copyURLToFile(url, tmpFile);
+            String readline;
+            BufferedReader reader = new BufferedReader(new FileReader(tmpFile));
+            while ((readline = reader.readLine()) != null) System.out.println(readline);
+        } catch (Exception e) {
+            System.out.println(e);
+        }
+    }
+
 }
