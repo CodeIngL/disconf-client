@@ -403,9 +403,9 @@ public class DeployListener implements ServletContextListener {
             FileUtils.copyURLToFile(url, tmpFile);
             properties.load(new FileReader(tmpFile));
             String content = FileUtils.readFileToString(tmpFile);
-            logger.info("config show start ---------------------------------------------------------");
+            logger.info("config show start ---app:{}---env:{}---version:{}---configFile:{}", irisMeta.app, irisMeta.env, irisMeta.version, irisMeta.key);
             logger.info("\n{}", content);
-            logger.info("config end  start ---------------------------------------------------------");
+            logger.info("config end  start ---app:{}---env:{}---version:{}---configFile:{}", irisMeta.app, irisMeta.env, irisMeta.version, irisMeta.key);
             return properties;
         } catch (MalformedURLException e) {
             logger.error("can't transform to url:{}", urlStr);
