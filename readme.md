@@ -23,7 +23,6 @@ simpile解决方案为：
 缺点：
 
 1. 不支持disconf动态修改
-2. 修改disconf配置,必须重新部署而不是简单重启
 
 也就说我们仅仅支持将文件托管给disconf管理。
 
@@ -37,7 +36,7 @@ pom
         <dependency>
 		    <groupId>cn.com.servyou.yypt</groupId>
 		    <artifactId>simple-remoteConf-client</artifactId>
-			<version>0.0.1-SNAPSHOT</verison>
+		    <version>0.0.1-SNAPSHOT</verison>
         </dependency>
 
 
@@ -52,7 +51,7 @@ web.xml
     </context-param>
     <context-param>
         <param-name>repositoryURL</param-name>
-        <param-value>http://192.168.150.165:9002/servyconf/api/config/file</param-value>
+        <param-value>http://192.168.150.165:9002/servyconf</param-value>
     </context-param>
     <context-param>
         <param-name>ignoreFiles</param-name>
@@ -83,44 +82,53 @@ web.xml
         <param-value>1.0.0</param-value>
     </context-param>
 
-- enable使用远程or本地模式
-- repositoryURL远程api前缀
-- ignoreFiles校验时需要忽略的文件
-- ignoreKeys替换是需要忽略的项
-- cautious_enable谨慎的模式
+- **enable_remote**: 是否开启该功能
+- **repositoryURL**: 远程api前缀
+- **ignoreFiles**: 校验时需要忽略的文件
+- **ignoreKeys**: 替换时需要忽略的项
+- **cautious_enable**: 谨慎的模式
 
-- iris_appName项目名
-- iris_appFileNames托管的配置文件名
-- iris_appEnv环境
-- iris_appVersion版本
+- **iris_appName**: 项目名
+- **iris_appFileNames**: 托管的配置文件名
+- **iris_appEnv**: 环境
+- **iris_appVersion**: 版本
 
 
 #### 逻辑原理
 
-1. 尝试访问配置中心的配置，如果获得不了配置，将不生效
-2. 筛选可能配置文件，比如
+1. 访问配置中心的配置，如果获得不了配置，将短路整个过程
+
+2. 筛选可能配置文件(WEB-INF该目录下子目录)。
 	![](http://10.209.130.126:8001/statics/servyou/img/2.png)
 
-	- 对于classes目录，我们进筛选其子一级目录下的.properties文件
+	- 对于classes目录，我们仅筛选该目录下的.properties文件不包括子目录
 		![](http://10.209.130.126:8001/statics/servyou/img/3.png)
 
 	- 其他目录则是完全递归筛选(properties和xml)
 
-    > **tip**:如果所有配置文件中全无（**${}**），我们将跳过配置，因为我们假设这是一次紧急重启。如果不是紧急重启，建议使用走部署应用的流程。
-		
-3. 将筛选的配置文件放置一个临时目录中
+3. 筛选的配置文件备份
 	![](http://10.209.130.126:8001/statics/servyou/img/4.png)
-    > **tip**：在放置前，我们将清空临时目录。
 
-4. 处理临时目录中的配置文件，并将处理后的内容，写回源文件中，完成占位符替换。
+4. 处理备份的配置文件，并将处理后的内容，写回源文件中，完成占位符替换。
 
 5. 程序正常启动
 
 
+#### 策略 ####
+
+我们总是会检验当前的配置文件是否含有占位符。
+
+我们提供了一种保守策略。
+
+1. 配置文件没有含有占位符，保守策略不开启的情况下，我们将短路整个过程。
+2. 保守策略开启的情况下，我们将从备份文件推导出实际的配置文件。 而忽略整个过程，但是备份文件不在的情况下，我们将进行回退到正常模式。
+3. 正常模式下，我们将配置文件备份，并对备份处理后写会原来的文件中。
+
 
 #### FAQ
 
-1. 运行时，处理配置文件，发现不能解析的**${}**，将会出错
+1. 筛选配置文件的时候，可以通过`ignoreFiles`进行忽略
+1. 处理配置文件的时候，发现不能解析的**${}**，将会出错。 可以通过`ignoreKeys`进行忽略
 2. 仅仅支持将配置文件托管给disconf管理，不支持动态加载
 
 #### 最佳实践

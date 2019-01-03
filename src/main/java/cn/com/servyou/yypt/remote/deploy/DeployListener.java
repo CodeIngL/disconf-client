@@ -18,7 +18,15 @@ import static org.springframework.beans.factory.config.PlaceholderConfigurerSupp
 import static org.springframework.beans.factory.config.PlaceholderConfigurerSupport.DEFAULT_VALUE_SEPARATOR;
 
 /**
- * <p>Description: </p>
+ * <p>Description: this is only for adapting 。 so we didn't split to classes 。 </p>
+ *
+ * <p>
+ * We gather responsibility in one file。
+ * </p>
+ *
+ * <p>
+ * We didn't consider using properties(file) to loading config
+ * </p>
  * <p>税友软件集团有限公司</p>
  *
  * @author laihj
@@ -27,6 +35,11 @@ import static org.springframework.beans.factory.config.PlaceholderConfigurerSupp
 public class DeployListener implements ServletContextListener {
 
     private static final Logger logger = LoggerFactory.getLogger(DeployListener.class);
+
+    /**
+     * 资源后缀
+     */
+    private static final String URL = "/api/config/file";
 
     /**
      * 后备目录
@@ -98,170 +111,200 @@ public class DeployListener implements ServletContextListener {
      */
     private final Set<String> ignoreFiles = new HashSet<String>(64);
 
+    /**
+     * 解析器
+     */
     private final PlaceholderResolvingResolver placeholderResolvingResolver = new PlaceholderResolvingResolver();
 
     @Override
     public void contextInitialized(ServletContextEvent servletContextEvent) {
-        try {
-            //检查模式
-            String enable = servletContextEvent.getServletContext().getInitParameter(ENABLE_REMOTE);
-            if (!"true".equalsIgnoreCase(enable)) {
-                logger.info("use local mode.");
-                return;
-            }
-            logger.info("use remote mode");
 
-            //解析忽略的文件配置，用于校验本次是否需要进行替代
-            String ignoreFiles = System.getProperty(IGNORE_VALUE);
-            if (ignoreFiles == null || "".equals(ignoreFiles.trim())) {
-                ignoreFiles = servletContextEvent.getServletContext().getInitParameter(IGNORE_FILE_VALUE);
-            }
-            if (ignoreFiles != null && !"".equals(ignoreFiles)) {
-                String[] fileKeys = ignoreFiles.split(",");
-                for (String file : fileKeys) {
-                    this.ignoreFiles.add(file);
-                }
-            }
+        ServletContext context = servletContextEvent.getServletContext();
 
-            //解析忽略的key
-            String ignoreKey = System.getProperty(IGNORE_VALUE);
-            if (ignoreKey == null || "".equals(ignoreKey.trim())) {
-                ignoreKey = servletContextEvent.getServletContext().getInitParameter(IGNORE_VALUE);
-            }
-            if (ignoreKey != null && !"".equals(ignoreKey)) {
-                String[] keys = ignoreKey.split(",");
-                for (String key : keys) {
-                    ignores.add(key);
-                }
-            }
-
-            //构建irisMeta或disconf meta
-            //todo ignore which remote technology we use
-            List<IrisMeta> irisMetas = buildMetas(servletContextEvent.getServletContext());
-
-            String rootPath = servletContextEvent.getServletContext().getRealPath("/") + "WEB-INF";
-            if (rootPath == null) {
-                return;
-            }
-            File rootFile = new File(rootPath);
-            if (!rootFile.exists()) {
-                logger.info("file:{} didn't exists", rootFile);
-                return;
-            }
-
-            //查找classes目录
-            String classesPath = rootPath + File.separator + "classes";
-            File classesDir = new File(classesPath);
-            if (!classesDir.exists()) {
-                logger.info("file:{} didn't exists", classesDir);
-                return;
-            }
-
-            //1. 访问远程的仓库，获得相关配置文件项
-            String remoteUrl = System.getProperty(DEPLOY_REPOSITORY_URL);
-            if (remoteUrl == null || "".equals(remoteUrl.trim())) {
-                remoteUrl = servletContextEvent.getServletContext().getInitParameter(DEPLOY_REPOSITORY_URL);
-            }
-            if (remoteUrl == null || "".equals(remoteUrl.trim())) {
-                return;
-            }
-            Properties properties = fetchDeployMeta(remoteUrl, irisMetas);
-            if (properties.isEmpty()) {
-                logger.warn("config properties is empty. has any problem? anything will not be replacement");
-                return; //认为我们已经无能为力了，发生重启时，但是配置文件已经被替换好了
-            }
-
-            //构建可能存在的配置文件的目录
-            List<File> subDirs = new ArrayList<File>();
-            for (File subFile : rootFile.listFiles()) {
-                if (!subFile.isDirectory()) {
-                    continue;
-                }
-                if ("lib".equals(subFile.getName())) {
-                    continue;
-                }
-                if ("classes".equals(subFile.getName())) {
-                    continue;
-                }
-                if (DEPLOY_TMP.equals(subFile.getName())) {
-                    continue;
-                }
-                subDirs.add(subFile);
-            }
-
-            //检查保守策略
-            boolean cautiousEnable = false;
-            String cautiousEnableStr = servletContextEvent.getServletContext().getInitParameter(CAUTIOUS_ENABLE);
-            if ("true".equalsIgnoreCase(cautiousEnableStr)) {
-                cautiousEnable = true;
-            }
-
-            //检查是否需要进行相关解析。
-            boolean passCheck = checkClasses(classesDir) && checkSubDirs(subDirs);
-            if (passCheck && !cautiousEnable) {
-                logger.info("no thing need to be resolve. use un cautious strategy");
-                return;
-            }
-            //目标的目录
-            final String deployTmpPath = rootPath + File.separator + DEPLOY_TMP;
-
-            //保守策略下的处理
-            if (passCheck) {
-                logger.info("use cautious strategy");
-                File deployTemp = new File(deployTmpPath);
-                if (deployTemp.exists()) {
-                    dealAllFile(new File(deployTmpPath), properties);
-                    return;
-                }
-            }
-
-            //正常策略下的处理，ignore 是否passcheck成功。
-            // 1. 删除目标
-            try {
-                FileUtils.deleteDirectory(new File(deployTmpPath));
-            } catch (IOException e) {
-                logger.error("delete file failed", e);
-            }
-
-            // 2. 构建目标
-            try {
-                FileUtils.forceMkdir(new File(deployTmpPath));
-            } catch (IOException e) {
-                logger.error("mkdir failed", e);
-            }
-
-            // 3. 拷贝子目录
-            try {
-                for (File subDir : subDirs) {
-                    FileUtils.copyDirectory(subDir, new File(deployTmpPath + File.separator + subDir.getName()));
-                }
-            } catch (IOException e) {
-                logger.error("copy dir failed", e);
-            }
-
-            // 4. 拷贝class目录东西
-            try {
-                File[] configProps = classesDir.listFiles(new FilenameFilter() {
-                    @Override
-                    public boolean accept(File dir, String name) {
-                        return name.contains(".properties");
-                    }
-                });
-                if (configProps != null) {
-                    File deployClassesDir = new File(deployTmpPath + File.separator + classesDir.getName());
-                    deployClassesDir.mkdir();
-                    for (File file : configProps) {
-                        FileUtils.copyFileToDirectory(file, deployClassesDir);
-                    }
-                }
-            } catch (IOException e) {
-                logger.error("copy file failed", e);
-            }
-            // 5. 处理
-            dealAllFile(new File(deployTmpPath), properties);
-        } catch (Exception e) {
-            logger.error("can't work fine because:{}", e);
+        //检查模式
+        String enable = context.getInitParameter(ENABLE_REMOTE);
+        if (!"true".equalsIgnoreCase(enable)) {
+            logger.info("use local mode.");
+            return;
         }
+        logger.info("use remote mode");
+
+        //解析忽略的文件配置，用于校验本次是否需要进行替代
+        Set<String> parsedIgnoreFiles = parseAndGetValues(context, IGNORE_FILE_VALUE, ",");
+        if (parsedIgnoreFiles != null) {
+            this.ignoreFiles.addAll(parsedIgnoreFiles);
+        }
+
+        //解析忽略的key
+        Set<String> parsedIgnoreKeys = parseAndGetValues(context, IGNORE_VALUE, ",");
+        if (parsedIgnoreKeys != null) {
+            this.ignores.addAll(parsedIgnoreKeys);
+        }
+
+        // 构建irisMeta或disconf meta
+        // deprecated plan that: todo ignore which remote technology we use
+        List<IrisMeta> irisMetas = buildMetas(context);
+
+        String rootPath = context.getRealPath("/") + "WEB-INF";
+        if (rootPath == null) {
+            logger.warn("we can't find WEB-INF location");
+            return;
+        }
+        File rootFile = new File(rootPath);
+        if (!rootFile.exists()) {
+            logger.warn("file:{} didn't exists", rootFile);
+            return;
+        }
+
+        //查找classes目录
+        String classesPath = rootPath + File.separator + "classes";
+        File classesDir = new File(classesPath);
+        if (!classesDir.exists()) {
+            logger.info("file:{} didn't exists", classesDir);
+            return;
+        }
+
+        //1. 访问远程的仓库，获得相关配置文件项
+        String remoteUrl = parseAndGetSingleValue(context, DEPLOY_REPOSITORY_URL);
+        if (remoteUrl == null || "".equals(remoteUrl)) {
+            throw new IllegalStateException("didn't config remoteUrl");
+        }
+        Properties properties = fetchDeployMeta(remoteUrl + URL, irisMetas);
+        if (properties.isEmpty()) {
+            logger.warn("config properties is empty. has any problem? anything will not be replacement");
+            return; //认为我们已经无能为力了，发生重启时，但是配置文件已经被替换好了
+        }
+
+        //构建可能存在的配置文件的目录
+        List<File> subDirs = new ArrayList<File>();
+        for (File subFile : rootFile.listFiles()) {
+            if (!subFile.isDirectory()) {
+                continue;
+            }
+            if ("lib".equals(subFile.getName())) {
+                continue;
+            }
+            if ("classes".equals(subFile.getName())) {
+                continue;
+            }
+            if (DEPLOY_TMP.equals(subFile.getName())) {
+                continue;
+            }
+            subDirs.add(subFile);
+        }
+
+        //检查保守策略
+        boolean cautiousEnable = false;
+        String cautiousEnableStr = parseAndGetSingleValue(context, CAUTIOUS_ENABLE);
+        if ("true".equalsIgnoreCase(cautiousEnableStr)) {
+            cautiousEnable = true;
+        }
+
+        //检查是否需要进行相关解析。
+        boolean passCheck = checkClasses(classesDir) && checkSubDirs(subDirs);
+        if (passCheck && !cautiousEnable) {
+            logger.info("no thing need to be resolve. use un cautious strategy");
+            return;
+        }
+        //目标的目录
+        final String deployTmpPath = rootPath + File.separator + DEPLOY_TMP;
+
+        //保守策略下的处理
+        if (passCheck) {
+            logger.info("use cautious strategy");
+            File deployTemp = new File(deployTmpPath);
+            if (deployTemp.exists()) {
+                dealAllFile(new File(deployTmpPath), properties);
+                return;
+            }
+        }
+
+        //正常策略下的处理，ignore 是否passcheck成功。
+        // 1. 删除目标
+        try {
+            FileUtils.deleteDirectory(new File(deployTmpPath));
+        } catch (IOException e) {
+            logger.error("delete file failed", e);
+        }
+
+        // 2. 构建目标
+        try {
+            FileUtils.forceMkdir(new File(deployTmpPath));
+        } catch (IOException e) {
+            logger.error("mkdir failed", e);
+        }
+
+        // 3. 拷贝子目录
+        try {
+            for (File subDir : subDirs) {
+                FileUtils.copyDirectory(subDir, new File(deployTmpPath + File.separator + subDir.getName()));
+            }
+        } catch (IOException e) {
+            logger.error("copy dir failed", e);
+        }
+
+        // 4. 拷贝class目录东西
+        try {
+            File[] configProps = classesDir.listFiles(new FilenameFilter() {
+                @Override
+                public boolean accept(File dir, String name) {
+                    return name.contains(".properties");
+                }
+            });
+            if (configProps != null) {
+                File deployClassesDir = new File(deployTmpPath + File.separator + classesDir.getName());
+                deployClassesDir.mkdir();
+                for (File file : configProps) {
+                    FileUtils.copyFileToDirectory(file, deployClassesDir);
+                }
+            }
+        } catch (IOException e) {
+            logger.error("copy file failed", e);
+        }
+        // 5. 处理
+        dealAllFile(new File(deployTmpPath), properties);
+    }
+
+    /**
+     * 解析获得当个值
+     *
+     * @param servletContext 上下文
+     * @param configKey      键
+     * @return string单值
+     */
+    private String parseAndGetSingleValue(ServletContext servletContext, String configKey) {
+        if (configKey == null || "".equals(configKey.trim())) {
+            throw new IllegalArgumentException(" configKey can't be null or \"\"");
+        }
+        String value = System.getProperty(configKey);
+        if (value == null || "".equals(value.trim())) {
+            value = servletContext.getInitParameter(configKey);
+        }
+        return value;
+    }
+
+    /**
+     * 解析获得多个值
+     *
+     * @param servletContext 上下文
+     * @param configKey      键
+     * @param splitter       分隔符
+     * @return set多个值
+     */
+    private Set<String> parseAndGetValues(ServletContext servletContext, String configKey, String splitter) {
+        String values = parseAndGetSingleValue(servletContext, configKey);
+        if (values == null || "".equals(values)) {
+            return null;
+        }
+        if (splitter == null) {
+            splitter = ",";
+        }
+        String[] keys = values.split(",");
+        Set<String> keySet = new HashSet<String>();
+        for (String key : keys) {
+            keySet.add(key);
+        }
+        return keySet;
     }
 
     /**
@@ -631,48 +674,6 @@ public class DeployListener implements ServletContextListener {
                     .append("&version=")
                     .append(version)
                     .toString();
-        }
-    }
-
-    /**
-     * just for Test
-     *
-     * @param args
-     */
-    public static void main(String[] args) {
-        Map<String, String> parameter = new HashMap<String, String>();
-        parameter.put("version", "1.0.0");
-        parameter.put("app", "nbgl_wlgl");
-        parameter.put("env", "dev");
-        parameter.put("key", "filter-docker-spare.properties");
-        parameter.put("type", "0");
-        StringBuilder builder = new StringBuilder("http://192.168.150.165:9002/servyconf/api/config/file");
-        builder.append("?");
-        for (String thisKey : parameter.keySet()) {
-            String cur = thisKey + "=" + parameter.get(thisKey);
-            cur += "&";
-            builder.append(cur);
-        }
-        if (builder.length() > 0) {
-            builder.deleteCharAt(builder.length() - 1);
-        }
-        try {
-            URL url = new URL(builder.toString());
-            System.out.println(url);
-            File file = new File(System.getProperty("user.dir") + File.separator + "tmp");
-            if (!file.exists()) {
-                file.mkdir();
-            }
-            File tmpFile = new File(file, "dconf.properties");
-            if (tmpFile.exists()) {
-                tmpFile.delete();
-            }
-            FileUtils.copyURLToFile(url, tmpFile);
-            String readline;
-            BufferedReader reader = new BufferedReader(new FileReader(tmpFile));
-            while ((readline = reader.readLine()) != null) System.out.println(readline);
-        } catch (Exception e) {
-            System.out.println(e);
         }
     }
 
