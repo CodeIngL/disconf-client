@@ -111,6 +111,12 @@ public class DeployListener implements ServletContextListener {
      */
     private final Set<String> ignoreFiles = new HashSet<String>(64);
 
+
+    /**
+     * 使用过的配置项
+     */
+    private final Set<String> usedConf = new HashSet<String>(128);
+
     /**
      * 解析器
      */
@@ -215,6 +221,7 @@ public class DeployListener implements ServletContextListener {
             File deployTemp = new File(deployTmpPath);
             if (deployTemp.exists()) {
                 dealAllFile(new File(deployTmpPath), properties);
+                reportResult(properties);
                 return;
             }
         }
@@ -263,6 +270,30 @@ public class DeployListener implements ServletContextListener {
         }
         // 5. 处理
         dealAllFile(new File(deployTmpPath), properties);
+
+        // 6. report
+        reportResult(properties);
+    }
+
+    /**
+     * 报告结果 主要是报告未使用的key
+     * @param properties 配置key
+     */
+    private void reportResult(Properties properties) {
+        if (usedConf.size() == 0){
+            return;
+        }
+        Set<Object> copy = new HashSet<Object>(properties.keySet());
+        copy.removeAll(usedConf);
+        if (copy.size() == 0){
+            return;
+        }
+        /**
+         * we didn't use String builder to contact . for simple view
+         */
+        for (Object key: copy) {
+            logger.warn("key:[{}] un used. please check you code!!!!!",key);
+        }
     }
 
     /**
@@ -370,6 +401,9 @@ public class DeployListener implements ServletContextListener {
         for (IrisMeta irisMeta : irisMetas) {
             Properties singlePro = buildSinglePro(urlStr, irisMeta);
             for (String key : singlePro.stringPropertyNames()) {
+                if (properties.contains(key)) {
+                    logger.warn("has some key [{}] in confile!!!!!", key);
+                }
                 properties.put(key, singlePro.get(key));
             }
         }
@@ -581,6 +615,7 @@ public class DeployListener implements ServletContextListener {
                     return null;
                 }
             }
+            usedConf.add(placeholderName);
             return propVal;
         }
     }
