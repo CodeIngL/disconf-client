@@ -27,6 +27,10 @@ import static org.springframework.beans.factory.config.PlaceholderConfigurerSupp
  * <p>
  * We didn't consider using properties(file) to loading config
  * </p>
+ * <p>
+ *     may be developer has same problem that use local has some confuse . that is ok .
+ *     we force you use remote to config your app
+ * </p>
  * <p>税友软件集团有限公司</p>
  *
  * @author laihj
