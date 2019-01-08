@@ -28,7 +28,7 @@ import static org.springframework.beans.factory.config.PlaceholderConfigurerSupp
  * We didn't consider using properties(file) to loading config
  * </p>
  * <p>
- *   Deprecated may be developer has same problem that use local has some confuse . that is ok .
+ * Deprecated may be developer has same problem that use local has some confuse . that is ok .
  * we force you use remote to config your app
  * </p>
  * <p>税友软件集团有限公司</p>
@@ -285,21 +285,22 @@ public class DeployListener implements ServletContextListener {
     /**
      * for local
      *
-     * @param remoteUrl
+     * @param localUrl
      * @return
      */
-    private Properties fetchDeploy(String remoteUrl) {
+    private Properties fetchDeploy(String localUrl) {
         Properties properties = new Properties();
-        File file = new File(remoteUrl);
+        File file = new File(localUrl);
         if (!file.exists()) {
-            logger.error("error unknown for you file. it didn't exists. local mode error");
+            logger.error("error unknown for you file:[{}]. it didn't exists. local mode error", localUrl);
             throw new IllegalStateException("error state, error unknown for you file. it didn't exists. local mode error");
         }
         if (file.isFile() && file.getName().endsWith(".properties")) {
+            logger.info("user local config file:[{}]", localUrl);
             try {
                 properties.load(new FileReader(file));
             } catch (IOException e) {
-                logger.error("read file happen error. please chek you file:{}", file.getName(), e);
+                logger.error("read file happen error. please chek you file:[{}]", file.getName(), e);
                 throw new IllegalStateException("error state, can't read file:" + file.getName() + e.getMessage());
             }
         }
@@ -311,6 +312,7 @@ public class DeployListener implements ServletContextListener {
                 }
             });
             if (proFiles != null && proFiles.length != 0) {
+                logger.info("user local config dir:[{}]", localUrl);
                 for (File proFile : proFiles) {
                     try {
                         properties.load(new FileReader(proFile));
