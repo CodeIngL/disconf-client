@@ -668,7 +668,7 @@ public class DeployListener implements ServletContextListener {
                     logger.error("can't find placeholder:{} 's value in [{}]", placeholderName, fileName);
                     throw new IllegalStateException("can't resolve placeholder:[" + placeholderName + "] in [" + fileName + "]");
                 } else {
-                    logger.info("ignore un resolve key's value in [{}]", placeholderName, fileName);
+                    logger.info("ignore unresolved key:[{}] in [{}]", placeholderName, fileName);
                     return null;
                 }
             }
