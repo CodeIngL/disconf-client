@@ -36,7 +36,7 @@ pom
         <dependency>
 		    <groupId>cn.com.servyou.yypt</groupId>
 		    <artifactId>simple-remoteConf-client</artifactId>
-		    <version>0.0.1-SNAPSHOT</verison>
+		    <version>0.0.2-SNAPSHOT</verison>
         </dependency>
 
 
@@ -82,7 +82,7 @@ web.xml
         <param-value>1.0.0</param-value>
     </context-param>
 
-- **enable_remote**: 是否开启该功能
+- **enable_remote**: 远程或本地模式
 - **repositoryURL**: 远程api前缀
 - **ignoreFiles**: 校验时需要忽略的文件
 - **ignoreKeys**: 替换时需要忽略的项
@@ -136,6 +136,8 @@ web.xml
 1. 处理配置文件的时候，发现不能解析的**${}**，将会出错。 可以通过`ignoreKeys`进行忽略
     - 比如log4j的某些占位符不影响分析
 2. 仅仅支持将配置文件托管给disconf管理，不支持动态加载
+
+3. 本地模式,你需要指定你所用的properties文件的文件名，或者所在目录的路径。
 
 #### 最佳实践
 
