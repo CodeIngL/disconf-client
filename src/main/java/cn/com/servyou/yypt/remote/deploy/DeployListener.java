@@ -28,8 +28,8 @@ import static org.springframework.beans.factory.config.PlaceholderConfigurerSupp
  * We didn't consider using properties(file) to loading config
  * </p>
  * <p>
- *     may be developer has same problem that use local has some confuse . that is ok .
- *     we force you use remote to config your app
+ *   Deprecated may be developer has same problem that use local has some confuse . that is ok .
+ * we force you use remote to config your app
  * </p>
  * <p>税友软件集团有限公司</p>
  *
@@ -132,13 +132,14 @@ public class DeployListener implements ServletContextListener {
         ServletContext context = servletContextEvent.getServletContext();
 
         //检查模式
+        boolean useLocal = false;
         String enable = context.getInitParameter(ENABLE_REMOTE);
         if (!"true".equalsIgnoreCase(enable)) {
             logger.info("use local mode.");
-            return;
+            useLocal = true;
+        } else {
+            logger.info("use remote mode");
         }
-        logger.info("use remote mode");
-
         //解析忽略的文件配置，用于校验本次是否需要进行替代
         Set<String> parsedIgnoreFiles = parseAndGetValues(context, IGNORE_FILE_VALUE, ",");
         if (parsedIgnoreFiles != null) {
@@ -175,11 +176,13 @@ public class DeployListener implements ServletContextListener {
         }
 
         //1. 访问远程的仓库，获得相关配置文件项
-        String remoteUrl = parseAndGetSingleValue(context, DEPLOY_REPOSITORY_URL);
-        if (remoteUrl == null || "".equals(remoteUrl)) {
+        String url = parseAndGetSingleValue(context, DEPLOY_REPOSITORY_URL);
+        if (url == null || "".equals(url)) {
             throw new IllegalStateException("didn't config remoteUrl");
         }
-        Properties properties = fetchDeployMeta(remoteUrl + URL, irisMetas);
+
+        //处理两种模式
+        Properties properties = useLocal ? fetchDeploy(url) : fetchDeployMeta(url + URL, irisMetas);
         if (properties.isEmpty()) {
             logger.warn("config properties is empty. has any problem? anything will not be replacement");
             return; //认为我们已经无能为力了，发生重启时，但是配置文件已经被替换好了
@@ -280,23 +283,66 @@ public class DeployListener implements ServletContextListener {
     }
 
     /**
+     * for local
+     *
+     * @param remoteUrl
+     * @return
+     */
+    private Properties fetchDeploy(String remoteUrl) {
+        Properties properties = new Properties();
+        File file = new File(remoteUrl);
+        if (!file.exists()) {
+            logger.error("error unknown for you file. it didn't exists. local mode error");
+            throw new IllegalStateException("error state, error unknown for you file. it didn't exists. local mode error");
+        }
+        if (file.isFile() && file.getName().endsWith(".properties")) {
+            try {
+                properties.load(new FileReader(file));
+            } catch (IOException e) {
+                logger.error("read file happen error. please chek you file:{}", file.getName(), e);
+                throw new IllegalStateException("error state, can't read file:" + file.getName() + e.getMessage());
+            }
+        }
+        if (file.isDirectory()) {
+            File[] proFiles = file.listFiles(new FilenameFilter() {
+                @Override
+                public boolean accept(File dir, String name) {
+                    return name.endsWith(".properties");
+                }
+            });
+            if (proFiles != null && proFiles.length != 0) {
+                for (File proFile : proFiles) {
+                    try {
+                        properties.load(new FileReader(proFile));
+                    } catch (IOException e) {
+                        logger.error("read file happen error. please chek you file:{}", file.getName(), e);
+                        throw new IllegalStateException("error state, can't read file:" + file.getName() + e.getMessage());
+                    }
+                }
+            }
+        }
+        return properties;
+    }
+
+    /**
      * 报告结果 主要是报告未使用的key
+     *
      * @param properties 配置key
      */
     private void reportResult(Properties properties) {
-        if (usedConf.size() == 0){
+        if (usedConf.size() == 0) {
             return;
         }
         Set<Object> copy = new HashSet<Object>(properties.keySet());
         copy.removeAll(usedConf);
-        if (copy.size() == 0){
+        if (copy.size() == 0) {
             return;
         }
         /**
          * we didn't use String builder to contact . for simple view
          */
-        for (Object key: copy) {
-            logger.warn("key:[{}] un used. please check you code!!!!!",key);
+        for (Object key : copy) {
+            logger.warn("key:[{}] un used. please check you code!!!!!", key);
         }
     }
 
@@ -334,7 +380,7 @@ public class DeployListener implements ServletContextListener {
         if (splitter == null) {
             splitter = ",";
         }
-        String[] keys = values.split(",");
+        String[] keys = values.split(splitter);
         Set<String> keySet = new HashSet<String>();
         for (String key : keys) {
             keySet.add(key);
@@ -397,6 +443,13 @@ public class DeployListener implements ServletContextListener {
         }
     }
 
+    /**
+     * for remote
+     *
+     * @param urlStr
+     * @param irisMetas
+     * @return
+     */
     private Properties fetchDeployMeta(String urlStr, List<IrisMeta> irisMetas) {
         Properties properties = new Properties();
         if (irisMetas == null || irisMetas.size() == 0) {
@@ -627,7 +680,7 @@ public class DeployListener implements ServletContextListener {
     /**
      * iris对应的元信息
      */
-    private class IrisMeta {
+    private static class IrisMeta {
 
         /**
          * app名称
@@ -646,7 +699,7 @@ public class DeployListener implements ServletContextListener {
          */
         private String env;
 
-        IrisMeta(String app, String version, String key, String env) {
+        public IrisMeta(String app, String version, String key, String env) {
             if (app == null || "".equals(app)) {
                 throw new IllegalStateException("illegal app can't be null");
             }
