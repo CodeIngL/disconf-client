@@ -6,7 +6,7 @@
 
     <groupId>cn.com.servyou.yypt</groupId>
     <artifactId>simple-remoteConf-client</artifactId>
-    <version>0.0.2-RELEASE</version>
+    <version>0.0.3-SNAPSHOT</version>
 
 
     <distributionManagement>
