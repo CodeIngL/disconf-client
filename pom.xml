@@ -4,36 +4,10 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>cn.com.servyou.yypt</groupId>
-    <artifactId>yypt-disconf-client</artifactId>
+    <groupId>com.codeL.disconf</groupId>
+    <artifactId>disconf-client</artifactId>
     <version>0.0.3-SNAPSHOT</version>
 
-
-    <distributionManagement>
-        <repository>
-            <id>xinxi</id>
-            <name>xinxi</name>
-            <url>http://10.64.1.13/nexus/content/repositories/xinxi</url>
-        </repository>
-        <snapshotRepository>
-            <id>xinxi-snapshot</id>
-            <name>xinxi-snapshot</name>
-            <url>http://10.64.1.13/nexus/content/repositories/xinxi-snapshot</url>
-        </snapshotRepository>
-    </distributionManagement>
-
-
-    <dependencyManagement>
-        <dependencies>
-            <dependency>
-                <groupId>org.springframework</groupId>
-                <artifactId>spring-framework-bom</artifactId>
-                <version>4.3.18.RELEASE</version>
-                <type>pom</type>
-                <scope>import</scope>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
     <dependencies>
         <dependency>
             <groupId>javax.servlet</groupId>
@@ -57,16 +31,7 @@
             <scope>compile</scope>
             <optional>true</optional>
         </dependency>
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-core</artifactId>
-            <optional>true</optional>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-beans</artifactId>
-            <optional>true</optional>
-        </dependency>
+
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
@@ -94,6 +59,29 @@
                     <target>1.6</target>
                     <encoding>UTF-8</encoding>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <version>3.0.1</version>
+                <configuration>
+                    <attach>true</attach>
+                </configuration>
+                <executions>
+                    <execution>
+                        <phase>compile</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>attach-source</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>jar-no-fork</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

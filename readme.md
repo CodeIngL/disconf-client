@@ -8,8 +8,6 @@
 
 项目中filter过多，维护不方便。同时为了部分的安全，线上配置很多需要配置到线上对应的mavan的setting中。
 
-![](http://10.209.130.126:8001/statics/servyou/img/1.png)
-
 ### simpile解决方案 ###
 
 simpile解决方案为：
@@ -34,15 +32,15 @@ simpile解决方案为：
 pom
 
         <dependency>
-		    <groupId>cn.com.servyou.yypt</groupId>
-		    <artifactId>yypt-disconf-client</artifactId>
-		    <version>0.0.2-SNAPSHOT</verison>
+		    <groupId>com.codeL.disconf</groupId>
+		    <artifactId>disconf-client</artifactId>
+		    <version>0.0.3-SNAPSHOT</verison>
         </dependency>
 
 web.xml 
 
     <listener>
-        <listener-class>cn.com.servyou.yypt.remote.deploy.DeployListener</listener-class>
+        <listener-class>com.codeL.disconf.remote.deploy.DeployListener</listener-class>
     </listener>
     <context-param>
         <param-name>enable_remote</param-name>
@@ -50,7 +48,7 @@ web.xml
     </context-param>
     <context-param>
         <param-name>repositoryURL</param-name>
-        <param-value>http://192.168.150.165:9002/servyconf</param-value>
+        <param-value>http://localhost/url</param-value>
     </context-param>
     <context-param>
         <param-name>ignoreFiles</param-name>
@@ -65,19 +63,19 @@ web.xml
         <param-value>true</param-value>
     </context-param>
     <context-param>
-        <param-name>iris_appName</param-name>
-        <param-value>nbgl_wlgl</param-value>
+        <param-name>disconf_appName</param-name>
+        <param-value>aaaName</param-value>
     </context-param>
     <context-param>
-        <param-name>iris_appFileNames</param-name>
+        <param-name>disconf_appFileNames</param-name>
         <param-value>filter-docker-spare.properties</param-value>
     </context-param>
     <context-param>
-        <param-name>iris_appEnv</param-name>
+        <param-name>disconf_appEnv</param-name>
         <param-value>dev</param-value>
     </context-param>
     <context-param>
-        <param-name>iris_appVersion</param-name>
+        <param-name>disconf_appVersion</param-name>
         <param-value>1.0.0</param-value>
     </context-param>
 
@@ -87,10 +85,10 @@ web.xml
 - **ignoreKeys**: 替换时需要忽略的项
 - **cautious_enable**: 谨慎的模式
 
-- **iris_appName**: 项目名
-- **iris_appFileNames**: 托管的配置文件名
-- **iris_appEnv**: 环境
-- **iris_appVersion**: 版本
+- **disconf_appName**: 项目名
+- **disconf_appFileNames**: 托管的配置文件名
+- **disconf_appEnv**: 环境
+- **disconf_appVersion**: 版本
 
 
 #### 逻辑原理
@@ -98,10 +96,8 @@ web.xml
 1. 访问配置中心(远程or本地)的配置，如果获得不了配置，或者没有配置项，将短路整个过程。
 
 2. 筛选可能配置文件(WEB-INF该目录下子目录)。
-	![](http://10.209.130.126:8001/statics/servyou/img/2.png)
 
 	- 对于classes目录，我们仅筛选**该目录**下的.properties文件不包括其子目录
-		![](http://10.209.130.126:8001/statics/servyou/img/3.png)
 
 	- **其他目录**则是完全递归筛选(properties和xml)
 	
@@ -109,7 +105,6 @@ web.xml
 
 3. 筛选的配置文件备份
     - **WEB-INF下deploy_tmp**
-	![](http://10.209.130.126:8001/statics/servyou/img/4.png)
 
 4. 处理备份的配置文件，并将处理后的内容，写回源文件中，完成占位符替换。
 
@@ -128,7 +123,7 @@ web.xml
 
 > tip: 禁用保守策略下,你备份通常会在你出错的时候进行轮转。即你不能依赖备份的校验来告诉你，你那里出错了。
 > 
-> 禁用保守策略,也就是配置的错误情况下，请重新部署，而不是简单重启。
+> 禁用保守策略,也就是配置的错误情况下，请重新打包部署，而不是简单重启。
 
 
 #### FAQ
@@ -139,10 +134,52 @@ web.xml
     - 比如log4j的某些占位符不影响分析
 2. 仅仅支持将配置文件托管给disconf管理，不支持动态加载
 3. 本地模式,你需要指定你所用的properties文件的文件名，或者所在目录的路径。
+4. 我们不区分注解下的**${}**符号，如果一段配置没有用，请直接删掉它
 
 #### 最佳实践
 
 - 修改disconf配置后，重新部署。使用CI,CD流程,避免在机器上直接操作
+
+
+#### maven结合的最佳实践 ####
+
+我们有着不同的环境，即使有着远程的配置，但是我们需要构建不同的信息去访问远程的配置
+
+
+如果你使用war形式的。
+
+	  <resources>
+            <resource>
+                <directory>
+                    src/main/resources
+                </directory>
+            </resource>
+            <resource>
+                <directory>
+                    src/main/webapp/WEB-INF
+                </directory>
+                <filtering>true</filtering>
+                <includes>
+                    <include>web.xml</include>
+                </includes>
+                <targetPath>${project.build.directory}/${project.build.finalName}/WEB-INF</targetPath>
+            </resource>
+       </resources>
+
+我们的客户端需要处理的web.xml。 因此需要多配一个处理，
+
+			<plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>2.1.1</version>
+                <configuration>
+                    <warName>nbgl2-wlgl</warName>
+                    <warSourceExcludes>WEB-INF/web.xml</warSourceExcludes>
+                    <outputDirectory>${project.build.directory}/dist</outputDirectory>
+                </configuration>
+            </plugin>
+
+我们在resource中已经处理过了，因此war包的时候，请将它排除。避免复制时无效
 
 
 

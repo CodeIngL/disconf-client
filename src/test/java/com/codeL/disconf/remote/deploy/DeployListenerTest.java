@@ -1,4 +1,4 @@
-package cn.com.servyou.yypt.remote.deploy;
+package com.codeL.disconf.remote.deploy;
 
 import org.apache.commons.io.FileUtils;
 
@@ -32,7 +32,7 @@ public class DeployListenerTest {
         parameter.put("env", "dev");
         parameter.put("key", "filter-docker-spare.properties");
         parameter.put("type", "0");
-        StringBuilder builder = new StringBuilder("http://192.168.150.165:9002/servyconf/api/config/file");
+        StringBuilder builder = new StringBuilder("http://192.168.150.165:9002/conf/api/config/file");
         builder.append("?");
         for (String thisKey : parameter.keySet()) {
             String cur = thisKey + "=" + parameter.get(thisKey);

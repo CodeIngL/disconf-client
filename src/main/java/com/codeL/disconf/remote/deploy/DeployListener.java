@@ -1,21 +1,26 @@
-package cn.com.servyou.yypt.remote.deploy;
+package com.codeL.disconf.remote.deploy;
 
+import com.codeL.disconf.remote.deploy.util.PropertyPlaceholderHelper;
 import org.apache.commons.io.FileUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.util.PropertyPlaceholderHelper;
 
 import javax.servlet.ServletContext;
 import javax.servlet.ServletContextEvent;
 import javax.servlet.ServletContextListener;
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.FilenameFilter;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.util.*;
-
-import static org.springframework.beans.factory.config.PlaceholderConfigurerSupport.DEFAULT_PLACEHOLDER_PREFIX;
-import static org.springframework.beans.factory.config.PlaceholderConfigurerSupport.DEFAULT_PLACEHOLDER_SUFFIX;
-import static org.springframework.beans.factory.config.PlaceholderConfigurerSupport.DEFAULT_VALUE_SEPARATOR;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Properties;
+import java.util.Set;
 
 /**
  * <p>
@@ -28,12 +33,16 @@ import static org.springframework.beans.factory.config.PlaceholderConfigurerSupp
  * <p>
  * More info see readme
  * </p>
- * <p>税友软件集团有限公司</p>
  *
  * @author laihj
  * 2018/11/27
  */
 public class DeployListener implements ServletContextListener {
+
+    public static final String DEFAULT_PLACEHOLDER_PREFIX = "${";
+    public static final String DEFAULT_PLACEHOLDER_SUFFIX = "}";
+    public static final String DEFAULT_VALUE_SEPARATOR = ":";
+
 
     private static final Logger logger = LoggerFactory.getLogger(DeployListener.class);
 
@@ -84,22 +93,22 @@ public class DeployListener implements ServletContextListener {
     /**
      * 名字
      */
-    private static final String APP = "iris_appName";
+    private static final String APP = "disconf_appName";
 
     /**
      * 文件名
      */
-    private static final String KEY = "iris_appFileNames";
+    private static final String KEY = "disconf_appFileNames";
 
     /**
      * 环境
      */
-    private static final String ENV = "iris_appEnv";
+    private static final String ENV = "disconf_appEnv";
 
     /**
      * 版本
      */
-    private static final String VERSION = "iris_appVersion";
+    private static final String VERSION = "disconf_appVersion";
 
     /**
      * 替换时忽略的项
@@ -149,15 +158,15 @@ public class DeployListener implements ServletContextListener {
             this.ignores.addAll(parsedIgnoreKeys);
         }
 
-        // 构建irisMeta或disconf meta
+        // 构建disconfMeta或disconf meta
         // deprecated plan that: todo ignore which remote technology we use
-        List<IrisMeta> irisMetas = buildMetas(context);
+        List<DisconfMeta> disconfMetas = buildMetas(context);
 
-        String rootPath = context.getRealPath("/") + "WEB-INF";
-        if (rootPath == null) {
-            logger.warn("we can't find WEB-INF location");
-            return;
+        String root = context.getRealPath("/");
+        if (!root.endsWith(File.separator)) {
+            root = root + File.separator;
         }
+        String rootPath = root + "WEB-INF";
         File rootFile = new File(rootPath);
         if (!rootFile.exists()) {
             logger.warn("file:{} didn't exists", rootFile);
@@ -175,11 +184,11 @@ public class DeployListener implements ServletContextListener {
         //1. 访问远程的仓库，获得相关配置文件项
         String url = parseAndGetSingleValue(context, DEPLOY_REPOSITORY_URL);
         if (url == null || "".equals(url)) {
-            throw new IllegalStateException("didn't config remoteUrl");
+            throw new IllegalStateException("repositoryURL config not found");
         }
 
         //处理两种模式
-        Properties properties = useLocal ? fetchDeploy(url) : fetchDeployMeta(url + URL, irisMetas);
+        Properties properties = useLocal ? fetchDeploy(url) : fetchDeployMeta(url + URL, disconfMetas);
         if (properties.isEmpty()) {
             logger.warn("config properties is empty. has any problem? anything will not be replacement");
             return; //认为我们已经无能为力了，发生重启时，但是配置文件已经被替换好了
@@ -213,7 +222,7 @@ public class DeployListener implements ServletContextListener {
         //检查是否需要进行相关解析。
         boolean passCheck = checkClasses(classesDir) && checkSubDirs(subDirs);
         if (passCheck && !cautiousEnable) {
-            logger.info("no thing need to be resolve. use un cautious strategy");
+            logger.info("nothing needs to be resolve. use uncautious strategy");
             return;
         }
         //目标的目录
@@ -391,9 +400,9 @@ public class DeployListener implements ServletContextListener {
      * 构建多个元信息
      *
      * @param servletContext
-     * @return iris配置
+     * @return disconf配置
      */
-    private List<IrisMeta> buildMetas(ServletContext servletContext) {
+    private List<DisconfMeta> buildMetas(ServletContext servletContext) {
         String app = parseAndGetSingleValue(servletContext, APP);
         String env = parseAndGetSingleValue(servletContext, ENV);
         String ver = parseAndGetSingleValue(servletContext, VERSION);
@@ -402,11 +411,11 @@ public class DeployListener implements ServletContextListener {
             throw new IllegalStateException("illegal key can't be null");
         }
         String[] key = keys.split(",");
-        List<IrisMeta> irisMetas = new ArrayList<IrisMeta>();
+        List<DisconfMeta> disconfMetas = new ArrayList<DisconfMeta>();
         for (String singleKey : key) {
-            irisMetas.add(new IrisMeta(app, ver, singleKey, env));
+            disconfMetas.add(new DisconfMeta(app, ver, singleKey, env));
         }
-        return irisMetas;
+        return disconfMetas;
     }
 
     /**
@@ -446,16 +455,16 @@ public class DeployListener implements ServletContextListener {
      * for remote
      *
      * @param urlStr
-     * @param irisMetas
+     * @param disconfMetas
      * @return
      */
-    private Properties fetchDeployMeta(String urlStr, List<IrisMeta> irisMetas) {
+    private Properties fetchDeployMeta(String urlStr, List<DisconfMeta> disconfMetas) {
         Properties properties = new Properties();
-        if (irisMetas == null || irisMetas.size() == 0) {
+        if (disconfMetas == null || disconfMetas.size() == 0) {
             return properties;
         }
-        for (IrisMeta irisMeta : irisMetas) {
-            Properties singlePro = buildSinglePro(urlStr, irisMeta);
+        for (DisconfMeta disconfMeta : disconfMetas) {
+            Properties singlePro = buildSinglePro(urlStr, disconfMeta);
             for (String key : singlePro.stringPropertyNames()) {
                 if (properties.contains(key)) {
                     logger.warn("has some key [{}] in confile!!!!!", key);
@@ -466,36 +475,36 @@ public class DeployListener implements ServletContextListener {
         return properties;
     }
 
-    private Properties buildSinglePro(String urlStr, IrisMeta irisMeta) {
+    private Properties buildSinglePro(String urlStr, DisconfMeta disconfMeta) {
         Properties properties = new Properties();
-        if (irisMeta == null) {
+        if (disconfMeta == null) {
             return properties;
         }
         try {
-            URL url = new URL(urlStr + irisMeta.toUrlParameters());
+            URL url = new URL(urlStr + disconfMeta.toUrlParameters());
             StringBuilder backUp = new StringBuilder(System.getProperty("user.dir"));
             backUp.append(File.separator)
                     .append("tmp")
                     .append(File.separator)
-                    .append(irisMeta.env)
+                    .append(disconfMeta.env)
                     .append(File.separator)
-                    .append(irisMeta.app)
+                    .append(disconfMeta.app)
                     .append(File.separator)
-                    .append(irisMeta.version);
+                    .append(disconfMeta.version);
             File file = new File(backUp.toString());
             if (!file.exists()) {
                 file.mkdirs();
             }
-            File tmpFile = new File(file, irisMeta.key);
+            File tmpFile = new File(file, disconfMeta.key);
             if (tmpFile.exists()) {
                 tmpFile.delete();
             }
             FileUtils.copyURLToFile(url, tmpFile);
             properties.load(new FileReader(tmpFile));
             String content = FileUtils.readFileToString(tmpFile);
-            logger.info("config show start ---app:{}---env:{}---version:{}---configFile:{}", irisMeta.app, irisMeta.env, irisMeta.version, irisMeta.key);
+            logger.info("config show start ---app:{}---env:{}---version:{}---configFile:{}", disconfMeta.app, disconfMeta.env, disconfMeta.version, disconfMeta.key);
             logger.info("\n{}", content);
-            logger.info("config end  start ---app:{}---env:{}---version:{}---configFile:{}", irisMeta.app, irisMeta.env, irisMeta.version, irisMeta.key);
+            logger.info("config end  start ---app:{}---env:{}---version:{}---configFile:{}", disconfMeta.app, disconfMeta.env, disconfMeta.version, disconfMeta.key);
             return properties;
         } catch (MalformedURLException e) {
             logger.error("can't transform to url:{}", urlStr);
@@ -686,9 +695,9 @@ public class DeployListener implements ServletContextListener {
     }
 
     /**
-     * iris对应的元信息
+     * disconf对应的元信息
      */
-    private class IrisMeta {
+    private class DisconfMeta {
 
         /**
          * app名称
@@ -707,7 +716,7 @@ public class DeployListener implements ServletContextListener {
          */
         private String env;
 
-        IrisMeta(String app, String version, String key, String env) {
+        DisconfMeta(String app, String version, String key, String env) {
             if (app == null || "".equals(app)) {
                 throw new IllegalStateException("illegal app can't be null");
             }
