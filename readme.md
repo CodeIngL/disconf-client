@@ -62,7 +62,7 @@ web.xml
     </context-param>
     <context-param>
         <param-name>cautious_enable</param-name>
-        <param-value>false</param-value>
+        <param-value>true</param-value>
     </context-param>
     <context-param>
         <param-name>iris_appName</param-name>
