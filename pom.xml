@@ -5,7 +5,7 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>cn.com.servyou.yypt</groupId>
-    <artifactId>simple-remoteConf-client</artifactId>
+    <artifactId>yypt-disconf-client</artifactId>
     <version>0.0.3-SNAPSHOT</version>
 
 
