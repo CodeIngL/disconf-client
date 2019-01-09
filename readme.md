@@ -35,7 +35,7 @@ pom
 
         <dependency>
 		    <groupId>cn.com.servyou.yypt</groupId>
-		    <artifactId>simple-remoteConf-client</artifactId>
+		    <artifactId>yypt-disconf-client</artifactId>
 		    <version>0.0.2-SNAPSHOT</verison>
         </dependency>
 
