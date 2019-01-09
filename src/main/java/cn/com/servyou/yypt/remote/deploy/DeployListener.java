@@ -18,18 +18,15 @@ import static org.springframework.beans.factory.config.PlaceholderConfigurerSupp
 import static org.springframework.beans.factory.config.PlaceholderConfigurerSupport.DEFAULT_VALUE_SEPARATOR;
 
 /**
- * <p>Description: this is only for adapting 。 so we didn't split to classes 。 </p>
- *
  * <p>
- * We gather responsibility in one file。
+ * Description: this is only for adapting 。 so we didn't split to classes.
+ * </p>
+ * <p>
+ * We gather responsibility in one file。 because this is not more complex
  * </p>
  *
  * <p>
- * We didn't consider using properties(file) to loading config
- * </p>
- * <p>
- * Deprecated may be developer has same problem that use local has some confuse . that is ok .
- * we force you use remote to config your app
+ * More info see readme
  * </p>
  * <p>税友软件集团有限公司</p>
  *
@@ -650,10 +647,19 @@ public class DeployListener implements ServletContextListener {
      */
     private class RemotePropertyPlaceholderResolver implements PropertyPlaceholderHelper.PlaceholderResolver {
 
+        /**
+         * 当前的文件名
+         */
         private final String fileName;
 
+        /**
+         * 数据项
+         */
         private final Properties props;
 
+        /**
+         * 可以被忽略的数据项
+         */
         private final Set<String> ignores;
 
         RemotePropertyPlaceholderResolver(String fileName, Properties props) {
@@ -682,7 +688,7 @@ public class DeployListener implements ServletContextListener {
     /**
      * iris对应的元信息
      */
-    private static class IrisMeta {
+    private class IrisMeta {
 
         /**
          * app名称
@@ -701,7 +707,7 @@ public class DeployListener implements ServletContextListener {
          */
         private String env;
 
-        public IrisMeta(String app, String version, String key, String env) {
+        IrisMeta(String app, String version, String key, String env) {
             if (app == null || "".equals(app)) {
                 throw new IllegalStateException("illegal app can't be null");
             }
