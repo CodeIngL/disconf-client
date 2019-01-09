@@ -130,7 +130,7 @@ public class DeployListener implements ServletContextListener {
 
         //检查模式
         boolean useLocal = false;
-        String enable = context.getInitParameter(ENABLE_REMOTE);
+        String enable = parseAndGetSingleValue(context, ENABLE_REMOTE);
         if (!"true".equalsIgnoreCase(enable)) {
             logger.info("use local mode.");
             useLocal = true;
@@ -394,10 +394,10 @@ public class DeployListener implements ServletContextListener {
      * @return iris配置
      */
     private List<IrisMeta> buildMetas(ServletContext servletContext) {
-        String app = servletContext.getInitParameter(APP);
-        String env = servletContext.getInitParameter(ENV);
-        String ver = servletContext.getInitParameter(VERSION);
-        String keys = servletContext.getInitParameter(KEY);
+        String app = parseAndGetSingleValue(servletContext, APP);
+        String env = parseAndGetSingleValue(servletContext, ENV);
+        String ver = parseAndGetSingleValue(servletContext, VERSION);
+        String keys = parseAndGetSingleValue(servletContext, KEY);
         if (keys == null || "".equals(keys)) {
             throw new IllegalStateException("illegal key can't be null");
         }
